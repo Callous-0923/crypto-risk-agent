@@ -1,0 +1,39 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Temp / reports
+report_alerts.json
+p2_case.json
+p2_alert_result.json
+p2_final.json
+resume_final.json
+rule_version_report.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude
+.claude/
+
+# Logs
+*.log

@@ -1,0 +1,142 @@
+{
+  "title": "ETC Risk Agent",
+  "uid": "etc-risk-agent",
+  "refresh": "10s",
+  "panels": [
+    {
+      "title": "事件吞吐量 (events/min)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "rate(ingest_event_total[1m]) * 60",
+        "legendFormat": "{{asset}} / {{source}}"
+      }]
+    },
+    {
+      "title": "事件总线队列积压",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 6},
+      "targets": [{
+        "expr": "event_bus_queue_size",
+        "legendFormat": "积压条数"
+      }],
+      "fieldConfig": {
+        "thresholds": {
+          "steps": [
+            {"color": "green", "value": 0},
+            {"color": "yellow", "value": 1000},
+            {"color": "red", "value": 5000}
+          ]
+        }
+      }
+    },
+    {
+      "title": "WS 断连累计次数",
+      "type": "stat",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 6},
+      "targets": [{
+        "expr": "sum(ws_reconnect_total)",
+        "legendFormat": "断连次数"
+      }],
+      "fieldConfig": {
+        "thresholds": {
+          "steps": [
+            {"color": "green", "value": 0},
+            {"color": "yellow", "value": 3},
+            {"color": "red", "value": 10}
+          ]
+        }
+      }
+    },
+    {
+      "title": "采集延迟分布 p95 (秒)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 6, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(ingest_lag_seconds_bucket[5m]))",
+        "legendFormat": "p95 {{source}}"
+      }]
+    },
+    {
+      "title": "规则命中分布",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 6, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "rate(rule_hit_total[5m]) * 60",
+        "legendFormat": "{{rule_id}} [{{severity}}]"
+      }]
+    },
+    {
+      "title": "LLM 调用耗时 p95 (秒)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(llm_call_duration_seconds_bucket[5m]))",
+        "legendFormat": "LLM p95"
+      }]
+    },
+    {
+      "title": "LLM 错误率",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "rate(llm_error_total[5m]) / rate(llm_call_total[5m])",
+        "legendFormat": "错误率 {{error_type}}"
+      }]
+    },
+    {
+      "title": "pending_review 积压 Case 数",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 18, "w": 6, "h": 6},
+      "targets": [{
+        "expr": "pending_review_gauge",
+        "legendFormat": "积压数"
+      }],
+      "fieldConfig": {
+        "thresholds": {
+          "steps": [
+            {"color": "green", "value": 0},
+            {"color": "yellow", "value": 20},
+            {"color": "red", "value": 50}
+          ]
+        }
+      }
+    },
+    {
+      "title": "Alert 发送速率 (alerts/5min)",
+      "type": "timeseries",
+      "gridPos": {"x": 6, "y": 18, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "rate(alert_sent_total[5m]) * 300",
+        "legendFormat": "{{asset}} [{{severity}}]"
+      }]
+    },
+    {
+      "title": "人工审核操作分布",
+      "type": "piechart",
+      "gridPos": {"x": 18, "y": 18, "w": 6, "h": 6},
+      "targets": [{
+        "expr": "sum by (action) (human_review_total)",
+        "legendFormat": "{{action}}"
+      }]
+    },
+    {
+      "title": "数据质量问题",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 24, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "rate(data_quality_event_total[5m]) * 60",
+        "legendFormat": "{{asset}} {{issue_type}}"
+      }]
+    },
+    {
+      "title": "规则评估耗时 p99 (ms)",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 24, "w": 12, "h": 6},
+      "targets": [{
+        "expr": "histogram_quantile(0.99, rate(rule_evaluate_duration_seconds_bucket[5m])) * 1000",
+        "legendFormat": "p99 {{asset}}"
+      }]
+    }
+  ]
+}
