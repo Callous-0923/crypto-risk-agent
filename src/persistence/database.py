@@ -4,10 +4,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from sqlalchemy import (
-    JSON, Boolean, DateTime, Float, Integer, String, Text,
-    create_engine,
-)
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -59,6 +56,10 @@ class RiskCaseRow(Base):
     decision: Mapped[str | None] = mapped_column(String(20), nullable=True)
     summary_zh: Mapped[str] = mapped_column(Text, default="")
     severity: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    is_coordinator_case: Mapped[bool] = mapped_column(Boolean, default=False)
+    historical_context_zh: Mapped[str] = mapped_column(Text, default="")
+    risk_quantification_zh: Mapped[str] = mapped_column(Text, default="")
+    suppression_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class RiskAlertRow(Base):
@@ -120,6 +121,35 @@ engine = create_async_engine(settings.database_url, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
+async def _ensure_sqlite_column(table_name: str, column_name: str, ddl: str) -> None:
+    async with engine.begin() as conn:
+        result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
+        columns = {row[1] for row in result.fetchall()}
+        if column_name in columns:
+            return
+        await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
+
+
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _ensure_sqlite_column(
+        "risk_case",
+        "is_coordinator_case",
+        "is_coordinator_case BOOLEAN DEFAULT 0",
+    )
+    await _ensure_sqlite_column(
+        "risk_case",
+        "historical_context_zh",
+        "historical_context_zh TEXT DEFAULT ''",
+    )
+    await _ensure_sqlite_column(
+        "risk_case",
+        "risk_quantification_zh",
+        "risk_quantification_zh TEXT DEFAULT ''",
+    )
+    await _ensure_sqlite_column(
+        "risk_case",
+        "suppression_reason",
+        "suppression_reason TEXT",
+    )

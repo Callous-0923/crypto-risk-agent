@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     oi_delta_p2: float = 0.10
     liq_usd_p1: float = 50_000_000
     funding_z_p2: float = 2.5
+    coordinator_auto_approve_seconds: int = 300
 
 
 settings = Settings()

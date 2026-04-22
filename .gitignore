@@ -37,3 +37,7 @@ rule_version_report.json
 
 # Logs
 *.log
+
+# Interview / planning docs (Chinese filenames)
+面试*.md
+agent升级计划.md

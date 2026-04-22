@@ -110,6 +110,7 @@ class CaseStatus(str, Enum):
     OPEN = "open"
     PENDING_REVIEW = "pending_review"
     CLOSED = "closed"
+    SUPPRESSED = "suppressed"
 
 
 class RiskCase(BaseModel):
@@ -122,6 +123,10 @@ class RiskCase(BaseModel):
     decision: Decision | None = None
     summary_zh: str = ""           # LLM-generated Chinese summary
     severity: Severity | None = None
+    is_coordinator_case: bool = False
+    historical_context_zh: str = ""
+    risk_quantification_zh: str = ""
+    suppression_reason: str | None = None
 
 
 # ---------------------------------------------------------------------------

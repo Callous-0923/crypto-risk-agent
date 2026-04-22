@@ -22,6 +22,35 @@ router = APIRouter()
 # Observability: /metrics + /health
 # ---------------------------------------------------------------------------
 
+@router.get("/agent/status")
+async def agent_status():
+    from src.api.app import get_agent_status
+
+    return get_agent_status()
+
+
+@router.post("/agent/start")
+async def agent_start():
+    from src.api.app import start_ingestion
+
+    try:
+        await start_ingestion()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return {"status": "started"}
+
+
+@router.post("/agent/stop")
+async def agent_stop():
+    from src.api.app import stop_ingestion
+
+    try:
+        await stop_ingestion()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return {"status": "stopped"}
+
+
 @router.get("/metrics", include_in_schema=False)
 async def prometheus_metrics():
     """Prometheus scrape endpoint — Grafana 从这里拉指标。"""
@@ -37,6 +66,7 @@ async def health_check():
     - 否则 → stale（可触发外部告警）
     """
     from datetime import datetime, timezone
+    from src.api.app import get_agent_status
     from src.features.builder import get_feature_builder
     from src.domain.models import Asset
     from src.observability.metrics import event_bus_queue_size
@@ -55,6 +85,7 @@ async def health_check():
 
     return {
         "status": "ok" if all_ok else "stale",
+        "agent": get_agent_status(),
         "assets": asset_status,
         "event_bus_queue": event_bus_queue_size._value.get(),
     }
@@ -66,9 +97,9 @@ async def health_check():
 # ---------------------------------------------------------------------------
 
 @router.get("/cases")
-async def get_cases(asset: Optional[str] = None, limit: int = 50):
+async def get_cases(asset: Optional[str] = None, limit: int = 50, include_suppressed: bool = False):
     a = Asset(asset) if asset else None
-    cases = await list_risk_cases(a, limit)
+    cases = await list_risk_cases(a, limit, include_suppressed=include_suppressed)
     return [c.model_dump(mode="json") for c in cases]
 
 
