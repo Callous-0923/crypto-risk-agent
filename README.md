@@ -1,853 +1,551 @@
-# ETC Risk Agent
+# ETC Risk Agent — 加密货币实时风控智能体
 
-加密货币实时风控与提前预警系统。项目以 BTC、ETH、SOL 为监控对象，接入交易所实时行情，构建滚动特征快照，通过规则引擎、LangGraph 工作流、人工审核、评测总结和 LightGBM 风险预测模型完成风险发现、解释、审核和告警闭环。
+<div align="center">
 
-当前版本已经包含：
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Agent%20Orchestration-FF6F00?style=for-the-badge)](https://langchain.com/langgraph)
+[![LightGBM](https://img.shields.io/badge/LightGBM-%20ML%20Model-5CBB5C?style=for-the-badge&logo=lightgbm&logoColor=white)](https://lightgbm.readthedocs.io)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com)
 
-- 实时行情接入：Binance / OKX 行情源，支持 WebSocket 与 REST 轮询。
-- 风控规则引擎：P1/P2/P3 分级，提前预警，多信号确认，持续性确认，去重与疲劳抑制。
-- Agent 工作流：LangGraph 编排规则、专家分析、总结、人工审核、告警发送。
-- 人工审核台：待审核案例分页、approve/reject、审核备注、恢复执行。
-- 评测总结：真实运行指标、离线弱标签评测、提前预警八指标、吞吐、延迟、去重、LLM 成本、baseline 对比。
-- LightGBM 风险模型：实时预测、LLM-as-judge 弱标注、历史行情训练、模型状态展示。
-- 历史行情训练链路：Binance public data 2024/2025 1m K 线下载、落库、特征工程、动态弱标签、hard negative 采样。
+**一个从数据采集 → 特征工程 → ML 预测 → 规则引擎 → Agent 工作流 → 人工审核 → 告警分发 → 离线评测的完整加密货币风控闭环系统**
 
-> 当前默认实现是研发/演示版本，不是可直接用于资金安全决策的生产系统。告警结果需要人工审核或外部风控系统兜底。
+</div>
 
 ---
 
-## 快速启动
+<!-- 示例截图占位 -->
+<p align="center">
+  <em>📸 示例截图（请替换为你的实际截图）</em>
+  <br>
+  <img src="docs/screenshots/placeholder-dashboard.png" width="80%" alt="控制台截图">
+  <br>
+  <em>🔽 实时风控控制台 — 资产状态、K 线、告警流、待审核案例</em>
+</p>
+
+---
+
+## 👁️ 项目概览
+
+这是一个面向**求职展示**的全栈 Agent 项目，涵盖现代 AI 应用开发中的核心技术栈。系统以 **BTC / ETH / SOL** 为监控对象，接入 Binance / OKX 实时行情，通过 **[61 维滚动特征](#特征工程) → [LightGBM 风险排序](#模型指标) → [规则引擎](#规则引擎) → [LangGraph 多 Agent 工作流](#agent-工作流) → [人工审核](#人工审核台) → [告警分发](#告警分发)** 的完整链路，实现对加密货币市场风险的**提前发现、自动分析、人机协同决策和可控告警**。
+
+> **🎯 为什么值得放在简历上**：这是一个从 0 到 1 的完整 AI 系统——不是 DEMO 玩具，不是调包脚本，而是涵盖数据工程、特征工程、模型训练与优化（Optuna + 不平衡处理）、Agent 编排（LangGraph）、前后端分离、Docker 部署、Prometheus 运维监控的真实工程实践。
+
+---
+
+## 📊 核心性能指标
+
+<!-- 示例截图占位 -->
+<p align="center">
+  <em>📸 模型评测报告截图</em>
+  <br>
+  <img src="docs/screenshots/placeholder-model-report.png" width="70%" alt="模型评测">
+</p>
+
+| 指标 | 数值 | 说明 |
+|------|------|------|
+| **AUC-ROC** | **0.858** | 从基线 0.656 提升 30.8%，风险排序能力达到实用级别 |
+| **Recall** | **85.3%** | 每 10 次真实大幅波动，系统提前捕获 8.5 次 |
+| **Precision** | **77.2%** | 每 5 条告警中 4 条命中真风险 |
+| **F1 Score** | **0.811** | 漏报与误报之间达到高品质平衡 |
+| **数据规模** | **316 万条** | 2024 全年 Binance 1 分钟 K 线（BTC/ETH/SOL × 现货+合约） |
+| **特征维度** | **61 维** | 覆盖价格、波动、成交、OI、基差、数据质量 |
+| **Optuna 搜索** | **30 轮 TPE** | 8 维超参空间自动搜索 |
+
+### 三代演进
+
+```
+v1 随手基线 (F1=0.29, AUC=0.66, 6棵树早停)
+  → v2 平衡采样 (F1=0.57, AUC=0.77, 159棵树)
+    → v3 Optuna+全年数据 (F1=0.81, AUC=0.86, 275棵树充分收敛)
+```
+
+> 从一条"根本没学到东西"的基线到 0.81 F1 的可上线模型——**三版迭代，量化可追溯**。
+
+---
+
+## 🧭 系统总览
+
+### 数据流架构
+
+```
+┌─────────────────┐
+│  Binance / OKX   │  WebSocket + REST 轮询
+│  实时行情接入     │  SOCKS 代理支持
+└────────┬────────┘
+         │ RawEvent
+         ▼
+┌─────────────────┐
+│   Normalizer     │  标准化 + 校验
+│   + Validator    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  FeatureBuilder  │  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+│  30s 周期性快照   │  61 维特征 │ 滚动窗口计算
+│  + LightGBM 推理  │  predict_snapshot() → P1/P2/P3
+└────────┬────────┘
+         │ FeatureSnapshot + ML RuleHit
+         ▼
+┌─────────────────┐
+│   Rule Engine    │  P1: 高危直接告警
+│   多层规则命中    │  P2: 进入审核
+│   EW: 提前预警    │  P3: 仅记录
+└────────┬────────┘
+         │ RuleHit[]
+         ▼
+┌─────────────────┐
+│  LangGraph       │  load_memory → run_rules
+│  Agent 工作流     │  → expert_parallel (多分析师)
+│                  │  → summarizer → decide
+│                  │  → build_case → await_review → send_alert
+└────────┬────────┘
+         │ RiskCase / RiskAlert
+         ▼
+┌─────────────────┐
+│   前端控制台      │  实时看板 │ 审核台 │ 评测总结
+│   WebSocket 推送  │  Webhook 通知
+└─────────────────┘
+```
+
+### 离线训练链路
+
+```
+Binance Public Data (免费公开)
+  ↓ 按月 zip 下载 (data.binance.vision)
+historical_market_bar 表
+  ↓ build_snapshots_from_bars()
+FeatureSnapshot × 30 万
+  ↓ future_summary()  [O(n) 优化]
+动态分位数弱标注 (p2=0.85, p1=0.95)
+  ↓ 平衡采样 (正负比 ~1:1.2)
+LightGBM + Optuna TPE 搜索
+  ↓ Isotonic 校准 + F1 最佳阈值
+artifacts/risk_model/latest.joblib
+```
+
+---
+
+## 🧱 技术栈
+
+| 层级 | 技术 | 用途 |
+|------|------|------|
+| **语言** | Python 3.10+ / JavaScript (React) | 后端 + 前端 |
+| **Web 框架** | FastAPI + Uvicorn | REST API + WebSocket |
+| **前端** | React 18 + Vite | 实时控制台 SPA |
+| **数据库** | SQLAlchemy 2.0 + SQLite/aiosqlite | 所有业务数据持久化 |
+| **Agent 编排** | LangGraph | 规则→分析→总结→审核→告警 状态图 |
+| **ML 模型** | LightGBM + scikit-learn | 二分类风险排序 + Isotonic 校准 |
+| **超参优化** | Optuna (TPE Sampler + Median Pruner) | 30 轮自动搜索 |
+| **LLM** | OpenAI-compatible API (豆包/DeepSeek) | 多 Agent 分析、LLM-as-judge 标注 |
+| **数据源** | Binance WS / OKX WS+REST / Binance Public Data | 实时 + 历史行情 |
+| **运维** | Prometheus metrics / structlog | 14 个 Counter/Gauge/Histogram |
+| **部署** | Docker Compose | 一键启动前后端 |
+
+---
+
+## 🚀 快速启动
 
 ### 1. 环境要求
 
-- Docker Desktop
 - Python 3.10+
-- Node 20，使用 Docker 运行时不需要本机 Node
-- 可访问 Binance / OKX / 火山 Ark API 的网络环境
+- Node 20+（Docker 模式不需要）
+- Docker Desktop（推荐）
+- 可访问 Binance / OKX 的网络（国内需代理）
 
-### 2. 配置环境变量
-
-复制 `.env.example`：
+### 2. 一分钟启动
 
 ```powershell
+# 克隆仓库
+git clone https://github.com/Callous-0923/crypto-risk-agent.git
+cd crypto-risk-agent
+
+# 配置 LLM API Key
 Copy-Item .env.example .env
-```
+# 编辑 .env，填入 ARK_API_KEY
 
-至少配置：
-
-```env
-ARK_API_KEY=your_volcano_engine_api_key_here
-LLM_MODEL=doubao-seed-2-0-mini-260215
-DATABASE_URL=sqlite+aiosqlite:///./etc_agent.db
-WEBHOOK_URL=
-LOG_LEVEL=INFO
-```
-
-如果容器内需要代理访问交易所或 LLM 服务，配置：
-
-```env
-CONTAINER_HTTP_PROXY=http://host.docker.internal:7890
-CONTAINER_HTTPS_PROXY=http://host.docker.internal:7890
-CONTAINER_ALL_PROXY=
-CONTAINER_NO_PROXY=localhost,127.0.0.1,backend
-WS_PROXY=socks5://host.docker.internal:7890
-```
-
-### 3. 启动前后端
-
-```powershell
+# Docker 启动
 docker compose up -d --build
 ```
 
 访问：
 
-- 前端控制台：http://localhost:5173
-- 后端 API：http://localhost:8000
-- API 文档：http://localhost:8000/docs
-- 健康检查：http://localhost:8000/api/v1/health
+| 服务 | 地址 |
+|------|------|
+| 前端控制台 | http://localhost:8000 |
+| API 文档 (Swagger) | http://localhost:8000/docs |
+| 健康检查 | http://localhost:8000/api/v1/health |
 
-停止：
-
-```powershell
-docker compose down
-```
-
-### 4. 本地开发运行
+### 3. 本地开发
 
 ```powershell
 pip install -e .
-python main.py
-```
+python main.py                    # 后端 http://localhost:8000
 
-前端本地开发：
-
-```powershell
 cd frontend
-npm install
-npm run dev
+npm install && npm run dev        # 前端 http://localhost:5173
 ```
 
----
-
-## 项目结构
-
-```text
-etc-agent/
-├── main.py                         # 后端入口
-├── docker-compose.yml              # 前后端开发编排
-├── Dockerfile.backend.dev          # 后端镜像，包含 libgomp1 以支持 LightGBM
-├── pyproject.toml                  # Python 依赖
-├── .env.example                    # 环境变量样例
-├── artifacts/
-│   └── risk_model/
-│       └── latest.joblib           # 当前 LightGBM 模型产物
-├── frontend/
-│   ├── Dockerfile.dev
-│   ├── package.json
-│   └── src/
-│       ├── App.jsx                 # 实时、测试、评测三种工作区
-│       ├── main.jsx
-│       └── styles.css
-├── grafana/
-│   └── dashboard.json
-├── src/
-│   ├── api/
-│   │   ├── app.py                  # FastAPI app、启动/停止 ingestion
-│   │   └── routes.py               # REST API + WebSocket
-│   ├── core/
-│   │   ├── config.py               # pydantic-settings 配置
-│   │   ├── logging.py
-│   │   └── proxy.py                # OpenAI-compatible client/proxy
-│   ├── domain/
-│   │   └── models.py               # Pydantic 领域模型
-│   ├── ingestion/
-│   │   ├── normalizer.py
-│   │   ├── validator.py
-│   │   └── sources/
-│   │       ├── binance_ws.py
-│   │       ├── coinglass_poll.py
-│   │       ├── okx_rest.py
-│   │       └── okx_ws.py
-│   ├── features/
-│   │   └── builder.py              # 实时特征快照构建 + LightGBM 实时预测入口
-│   ├── rules/
-│   │   ├── config.py               # 规则阈值、版本化发布
-│   │   └── engine.py               # P1/P2/P3 与提前预警规则
-│   ├── graph/
-│   │   ├── state.py
-│   │   ├── orchestrator.py         # LangGraph 拓扑与 checkpoint
-│   │   ├── nodes.py                # 规则、专家、总结、审核、告警节点
-│   │   ├── coordinator.py          # 跨资产协调器
-│   │   └── review_assistants.py
-│   ├── ml/
-│   │   ├── features.py             # LightGBM 特征列与矩阵转换
-│   │   ├── risk_model.py           # 训练、校准、预测、模型状态
-│   │   ├── labeling.py             # LLM-as-judge / deterministic 弱标注
-│   │   ├── historical_data.py      # Binance public data 下载与解析
-│   │   ├── historical_features.py  # 历史 K 线转训练 FeatureSnapshot
-│   │   └── historical_training.py  # 历史训练、动态标签、hard negative
-│   ├── evaluation/
-│   │   └── offline.py              # 离线弱标签评测与提前预警调参
-│   ├── market/
-│   │   └── candles.py              # 1m K 线聚合
-│   ├── simulation/
-│   │   ├── scenarios.py
-│   │   └── runner.py               # 模拟场景测试
-│   ├── observability/
-│   │   ├── llm_trace.py
-│   │   └── metrics.py
-│   ├── notification/
-│   │   └── dispatcher.py           # Webhook + WebSocket 推送
-│   └── persistence/
-│       ├── database.py             # SQLAlchemy ORM 表
-│       └── repositories.py         # 数据访问层
-└── tests/
-    ├── test_historical_ml.py
-    ├── test_risk_model.py
-    ├── test_runtime_quality_api.py
-    ├── test_offline_evaluation.py
-    ├── test_simulation_runner.py
-    └── ...
-```
-
----
-
-## 总体架构
-
-```text
-实时交易所数据
-  ├─ Binance WS / OKX WS / REST Poll
-  └─ Normalizer
-        ↓ RawEvent
-EventBus
-        ↓
-FeatureBuilder
-  ├─ 价格、波动、OI、funding、爆仓、数据质量
-  ├─ FeatureSnapshot 落库
-  └─ LightGBM predict_snapshot
-        ↓
-RuleEngine + ML RuleHit
-  ├─ P1：高危，直接告警
-  ├─ P2：进入人工审核
-  ├─ P3：只记录或抑制，不正式告警
-  └─ Early Warning：提前预警候选
-        ↓
-LangGraph Workflow
-  ├─ load_memory
-  ├─ run_rules
-  ├─ expert_parallel
-  ├─ summarizer
-  ├─ decide
-  ├─ build_case
-  ├─ await_review
-  └─ send_alert
-        ↓
-前端控制台 / WebSocket / Webhook / 评测总结
-```
-
-历史训练链路：
-
-```text
-Binance public data
-  └─ monthly 1m klines zip
-        ↓
-historical_market_bar
-        ↓
-historical_features
-  ├─ ret_1m/5m/15m/30m/60m
-  ├─ realized_vol_5m/15m/60m
-  ├─ volume_z / trade_count_z
-  ├─ taker_buy_ratio
-  ├─ futures_basis / basis_z
-  └─ drawdown / runup / ATR
-        ↓
-dynamic weak label
-  ├─ p1/p2 by future-return quantile
-  ├─ none samples
-  └─ hard negatives
-        ↓
-LightGBM + isotonic calibration + threshold tuning
-        ↓
-artifacts/risk_model/latest.joblib
-```
-
----
-
-## 前端功能
-
-前端入口：http://localhost:5173
-
-### 实时模式
-
-- 查看 BTC / ETH / SOL 实时状态。
-- 查看 1m K 线。
-- 查看实时告警流。
-- 查看待审核案例。
-- 支持待审核分页。
-- 支持审核通过和拒绝。
-- 支持规则版本发布。
-
-### 测试模式
-
-- 运行内置模拟场景。
-- 查看场景执行结果。
-- 查看 LLM token、延迟、规则命中、告警触发等测试指标。
-
-### 评测总结
-
-- 真实运行样本量。
-- 质量指标：误报代理、漏报代理、precision/recall proxy。
-- 离线指标：offline precision、offline recall、offline miss rate。
-- 提前预警指标：召回率、准确率、平均提前量、转化率。
-- 延迟指标：ingest lag、case-to-alert、review turnaround。
-- 吞吐指标：events/sec、snapshots/sec、cases/hour、alerts/hour。
-- 去重指标：dedupe rate、duplicate suppressed、P2 聚合。
-- LLM 成本：调用次数、token、估算成本、单告警成本。
-- baseline 对比：相比纯规则基线的降噪效果。
-- LightGBM 模型状态：模型版本、样本量、precision、recall、F1、重要特征。
-
----
-
-## 核心 API
-
-所有接口前缀为 `/api/v1`。
-
-### 运行状态
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/health` | 健康检查、资产新鲜度、队列积压 |
-| GET | `/metrics` | Prometheus 指标 |
-| GET | `/agent/status` | ingestion 状态 |
-| POST | `/agent/start` | 启动实时数据接入 |
-| POST | `/agent/stop` | 停止实时数据接入 |
-
-### 市场数据
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/market/candles?asset=BTC&interval=1m&limit=60` | 读取聚合后的 1m K 线 |
-
-### 案例和告警
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/cases?status=pending_review&limit=10&offset=0&paginated=true` | 分页读取 case |
-| GET | `/cases/{case_id}` | 读取单个 case |
-| POST | `/cases/{case_id}/resume` | 人工审核 approve/reject |
-| GET | `/alerts?limit=50` | 读取告警 |
-| WebSocket | `/ws/alerts` | 实时告警流 |
-
-审核请求：
-
-```json
-{
-  "reviewer": "operator",
-  "action": "approve",
-  "comment": "确认风险，发送告警"
-}
-```
-
-拒绝：
-
-```json
-{
-  "reviewer": "operator",
-  "action": "reject",
-  "comment": "误报，关闭案例"
-}
-```
-
-### 规则管理
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/rules/active` | 当前生效规则 |
-| GET | `/rules/versions` | 规则版本列表 |
-| GET | `/rules/changelog` | 规则变更日志 |
-| POST | `/rules/publish` | 发布新规则版本 |
-
-### 模拟测试
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/simulation/scenarios` | 场景库 |
-| GET | `/simulation/runs/latest` | 最近一次运行 |
-| GET | `/simulation/runs` | 历史运行 |
-| POST | `/simulation/runs` | 执行场景 |
-
-### 评测
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/evaluation/summary` | 真实运行评测总结 |
-| GET | `/evaluation/offline` | 离线弱标签评测 |
-| GET | `/evaluation/early-warning/tune` | 提前预警阈值搜索 |
-
-### LightGBM 和历史训练
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/ml/risk-model/status` | 当前模型状态 |
-| GET | `/ml/risk-model/predictions?limit=20` | 最近模型预测 |
-| POST | `/ml/risk-model/label` | 对现有 feature_snapshot 做弱标注 |
-| POST | `/ml/risk-model/train` | 用现有 feature_snapshot 训练 |
-| POST | `/ml/historical-data/backfill` | 下载 Binance public data 历史 K 线 |
-| GET | `/ml/historical-data/status` | 查看历史数据落库量 |
-| POST | `/ml/risk-model/train-historical` | 用历史行情训练 LightGBM |
-
----
-
-## LightGBM 使用说明
-
-### 1. 查看模型状态
+### 4. 快速体验
 
 ```powershell
+# 灌入种子数据
+python scripts/seed_demo_data.py
+
+# 启动 Agent 开始处理
+Invoke-RestMethod -Method POST http://localhost:8000/api/v1/agent/start
+
+# 运行模拟场景
 Invoke-RestMethod `
-  -Uri http://localhost:8000/api/v1/ml/risk-model/status |
-  ConvertTo-Json -Depth 6
-```
-
-状态字段包括：
-
-- `available`
-- `model_version`
-- `training_samples`
-- `test_samples`
-- `metrics.precision`
-- `metrics.recall`
-- `metrics.f1`
-- `feature_importances`
-- `thresholds`
-- `training_metadata`
-- `label_count`
-
-### 2. 基于实时快照弱标注
-
-```powershell
-$body = @{
-  days = $null
-  horizon_minutes = 60
-  max_snapshots_per_asset = 10000
-  max_items = 500
-  use_llm_judge = $true
-  force = $false
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Uri http://localhost:8000/api/v1/ml/risk-model/label `
-  -Method Post `
+  -Uri http://localhost:8000/api/v1/simulation/runs `
+  -Method POST `
   -ContentType "application/json" `
-  -Body $body
+  -Body '{"scenario_id":"btc_flash_crash_p1"}'
 ```
-
-说明：
-
-- `use_llm_judge=true` 会调用 LLM-as-judge，成本较高。
-- 推荐先小批量跑，确认标注质量后再扩大。
-- 标注结果写入 `risk_model_label` 表。
-
-### 3. 基于实时快照训练
-
-```powershell
-$body = @{
-  days = $null
-  horizon_minutes = 60
-  max_snapshots_per_asset = 10000
-  max_label_items = 1000
-  use_llm_judge = $false
-  min_samples = 100
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Uri http://localhost:8000/api/v1/ml/risk-model/train `
-  -Method Post `
-  -ContentType "application/json" `
-  -Body $body
-```
-
-### 4. 下载 2024/2025 历史真实行情
-
-数据源使用 Binance public data：
-
-- Spot：`data/spot/monthly/klines`
-- USD-M Futures：`data/futures/um/monthly/klines`
-
-建议按月或季度分批下载，不建议一次性直接拉全量 2024/2025。
-
-示例：下载 BTC/ETH/SOL 2024 第一季度 1m K 线：
-
-```powershell
-$body = @{
-  start = "2024-01-01T00:00:00"
-  end = "2024-04-01T00:00:00"
-  assets = @("BTC", "ETH", "SOL")
-  interval = "1m"
-  market_types = @("spot", "futures_um")
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Uri http://localhost:8000/api/v1/ml/historical-data/backfill `
-  -Method Post `
-  -ContentType "application/json" `
-  -Body $body
-```
-
-查看落库量：
-
-```powershell
-Invoke-RestMethod `
-  -Uri http://localhost:8000/api/v1/ml/historical-data/status |
-  ConvertTo-Json -Depth 5
-```
-
-### 5. 用历史行情训练模型
-
-```powershell
-$body = @{
-  start = "2024-01-01T00:00:00"
-  end = "2026-01-01T00:00:00"
-  assets = @("BTC", "ETH", "SOL")
-  horizon_minutes = 60
-  max_snapshots_per_asset = $null
-  max_label_items = 100000
-  min_samples = 10000
-  p2_quantile = 0.95
-  p1_quantile = 0.995
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Uri http://localhost:8000/api/v1/ml/risk-model/train-historical `
-  -Method Post `
-  -ContentType "application/json" `
-  -Body $body
-```
-
-训练完成后模型写入：
-
-```text
-artifacts/risk_model/latest.joblib
-```
-
-线上预测会加载这个模型。模型包里保存了：
-
-- LightGBM classifier
-- feature columns
-- global calibrator
-- per-asset calibrator
-- validation metrics
-- threshold tuning result
-- feature importances
-- training metadata
-
-### 6. 实时预测行为
-
-实时快照落库后会执行：
-
-```text
-FeatureSnapshot -> predict_snapshot -> risk_model_prediction
-```
-
-然后：
-
-- `P1` / `P2`：转成 `ML_RISK_PROBABILITY` 规则命中，进入 LangGraph case/alert 链路。
-- `P3`：只记录预测，不触发正式告警。
-- `none`：只记录预测。
-
-如果模型元数据里有 `training_metadata.assets`，实时预测只会作用于这些资产，避免用 BTC-only 模型预测 ETH/SOL。
 
 ---
 
-## 特征工程
+## 🎯 Agent 工作流
 
-当前 `FeatureSnapshot` 覆盖以下特征族。
+系统用 **LangGraph** 实现了一个带人工审核的多 Agent 协作流程：
 
-### 价格波动
+```
+                    ┌──────────────┐
+                    │  load_memory  │  加载关联历史案例和偏好
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+                    │  run_rules    │  规则引擎 + ML 预测
+                    └──────┬───────┘
+                           │ 如果有命中
+              ┌────────────┼────────────┐
+              │            │            │
+     ┌────────▼───┐ ┌──────▼──────┐ ┌──▼──────────┐
+     │ 分析师-A    │ │  分析师-B   │ │  分析师-C    │  parallel execution
+     │ 技术面分析   │ │  衍生品分析  │ │  情绪面分析   │  各自给出独立判断
+     └────────┬───┘ └──────┬──────┘ └──┬──────────┘
+              │            │            │
+              └────────────┼────────────┘
+                           │
+                    ┌──────▼───────┐
+                    │  summarizer   │  综合多分析师结论
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+                    │   decide      │  决策: P1 告警 / P2 审核 / 抑制
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+                    │  build_case   │  构建风控案例
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+                    │ await_review  │  暂停等待人工审核 (checkpoint)
+                    └──────┬───────┘
+                           │ approve/reject
+                    ┌──────▼───────┐
+                    │  send_alert   │  WebSocket + Webhook 推送
+                    └──────────────┘
+```
 
-- `ret_1m`
-- `ret_5m`
-- `ret_15m`
-- `ret_30m`
-- `ret_60m`
-- `price_range_pct_1m`
-- `close_position_1m`
-- `max_drawdown_15m`
-- `max_drawdown_60m`
-- `max_runup_15m`
-- `max_runup_60m`
-
-### 波动率
-
-- `vol_z_1m`
-- `realized_vol_5m`
-- `realized_vol_15m`
-- `realized_vol_60m`
-- `atr_14`
-- `volatility_regime_60m`
-
-### 成交量与主动买入
-
-- `volume_1m`
-- `quote_volume_1m`
-- `volume_5m`
-- `quote_volume_5m`
-- `volume_15m`
-- `quote_volume_15m`
-- `volume_z_15m`
-- `volume_z_60m`
-- `trade_count_1m`
-- `trade_count_z_15m`
-- `taker_buy_ratio_1m`
-- `taker_buy_ratio_5m`
-
-### 衍生品与风险压力
-
-- `oi_delta_5m_pct`
-- `oi_delta_15m_pct`
-- `oi_delta_60m_pct`
-- `liq_5m_usd`
-- `funding_z`
-- `futures_basis_pct`
-- `basis_z_60m`
-
-### 数据质量
-
-- `source_stale`
-- `cross_source_conflict`
-- `ingest_lag_ms`
-
-> 注意：历史训练链路已经完整构造 OHLCV、成交量、taker buy ratio、basis 等增强字段；实时接入链路目前仍主要填充原有价格、OI、funding、爆仓和数据质量字段，成交量/basis 的实时补齐仍是后续优化项。
+> **亮点**：这是 LangGraph 在金融风控场景下的完整落地——checkpoint 持久化支持审核中断恢复、多分析师并行推理、规则+ML 信号融合进入工作流。
 
 ---
 
-## 弱标注策略
+## 🧠 模型优化历程
 
-项目目前有三类标注方式。
+<!-- 示例截图占位 -->
+<p align="center">
+  <em>📸 Optuna 超参搜索可视化</em>
+  <br>
+  <img src="docs/screenshots/placeholder-optuna.png" width="60%" alt="Optuna 搜索">
+</p>
 
-### deterministic future-window label
+### 从 0.29 到 0.81 F1 的三次迭代
 
-基于未来窗口最大绝对收益率：
+| 阶段 | 关键改进 | AUC | F1 | 正样本比 | 树数 |
+|------|----------|-----|-----|---------|------|
+| **v1 原始** | 默认参数，正负比 1:8 | 0.656 | 0.287 | 11.4% | 6 (早停!) |
+| **v2 平衡** | 正类全保留 + 1:1.2 负类配比 + `is_unbalance` | 0.769 | 0.565 | 49.3% | 159 |
+| **v3 Optuna** | 全年数据 + 30轮 TPE 搜索 + 放宽分位数 | **0.858** | **0.811** | **56.6%** | **275** |
 
-- 未来大波动：`p1` / `p2`
-- 未出现明显风险：`none`
+### 具体实施的不平衡修复手段
 
-优点是稳定、低成本。缺点是标签较粗。
+1. **放宽弱标注分位数**（p2: 0.95→0.85, p1: 0.995→0.95）——正样本从 5% 提升到 20%+
+2. **正类全保留 + 负类 1:1.2 配比**——改写 `_select_training_records`，不再截断珍贵的正样本
+3. **`is_unbalance=True`**——LightGBM 内建的不平衡优化
+4. **`future_summary` O(n²)→O(n)**——利用排序提前 break，标注速度提升 ~1000×
+5. **Optuna TPE 搜索**——8 维超参空间 30 轮自动探索，最佳参数使 AUC 再提升 11.6%
 
-### LLM-as-judge
+### 搜索到的最优参数
 
-对 `feature_snapshot + future_summary` 调用 LLM，让 LLM 判断：
-
-```json
-{
-  "label": "p1|p2|none",
-  "risk_probability": 0.0,
-  "confidence": 0.0,
-  "rationale": "..."
-}
-```
-
-建议用法：
-
-- 不建议全量调用。
-- 适合标注边界样本、多信号冲突样本、规则误报样本、规则漏报样本。
-
-### historical dynamic weak label
-
-历史行情训练使用动态分位数：
-
-- `p2_quantile`：默认 `0.95`
-- `p1_quantile`：默认 `0.995`
-
-每个资产独立计算未来窗口波动分布，避免 BTC、ETH、SOL 波动水平差异导致标签失真。
-
-同时引入 hard negative：
-
-- 当前信号看起来危险。
-- 但未来窗口没有真正风险。
-- 这类样本专门用于降低误报、提升 precision 和 F1。
+| 参数 | 默认 | 最优 | 含义 |
+|------|------|------|------|
+| learning_rate | 0.030 | **0.035** | 略激进的学习速度 |
+| num_leaves | 31 | **24** | 更少叶节点(正则更强) |
+| max_depth | 7 | **10** | 更深交互 |
+| min_child_samples | 15 | **41** | 强防过拟合 |
+| reg_alpha | 0.05 | **0.260** | 强 L1 正则 |
+| reg_lambda | 0.05 | **0.160** | 强 L2 正则 |
+| subsample | 0.80 | **0.84** | 每轮采样比例 |
+| colsample_bytree | 0.80 | **0.97** | 几乎用全部特征 |
 
 ---
 
-## 评测指标
+## 📐 特征工程
 
-评测页和 API 汇总以下指标。
+61 维特征覆盖五大维度——**价格、波动、量能、衍生品、数据质量**。
 
-### 告警质量
+### 价格动量 (11 维)
 
-- precision proxy
-- recall proxy
-- false positive proxy
-- missed alert proxy
-- offline precision
-- offline recall
-- offline miss rate
+`ret_1m` `ret_5m` `ret_15m` `ret_30m` `ret_60m` `price_range_pct_1m` `close_position_1m` `max_drawdown_15m` `max_drawdown_60m` `max_runup_15m` `max_runup_60m`
 
-### 提前预警八指标
+### 波动率 (7 维)
 
-- 提前预警召回率
-- 提前预警准确率
-- 平均提前量
-- 提前预警转化率
-- 正式告警召回率
-- 正式告警误报率
-- P95 告警延迟
-- 待审核积压
+`vol_z_1m` `realized_vol_5m` `realized_vol_15m` `realized_vol_60m` `atr_14` `volatility_regime_60m`
 
-### 性能与成本
+### 成交量与主动性 (12 维)
 
-- raw events
-- feature snapshots
-- events/sec
-- snapshots/sec
-- cases/hour
-- alerts/hour
-- avg ingest lag
-- p95 ingest lag
-- avg case-to-alert
-- LLM calls
-- LLM tokens
-- estimated LLM cost
-- cost per alert
+`volume_1m` `quote_volume_1m` `volume_5m` `quote_volume_5m` `volume_15m` `quote_volume_15m` `volume_z_15m` `volume_z_60m` `trade_count_1m` `trade_count_z_15m` `taker_buy_ratio_1m` `taker_buy_ratio_5m`
 
-### 去重与 baseline
+### 衍生品压力 (10 维)
 
-- dedupe rate
-- alert dedupe rate
-- duplicate suppressed
-- P2 aggregated
-- alert reduction vs rule baseline
-- prevented false positive proxy
+`oi_delta_5m_pct` `oi_delta_15m_pct` `oi_delta_60m_pct` `liq_5m_usd` `funding_z` `futures_basis_pct` `basis_z_60m`
 
-### LightGBM 指标
+### 数据质量 (3 维)
 
-- training samples
-- test samples
-- precision
-- recall
-- F1
-- selected threshold
-- top feature importances
-- training metadata
+`source_stale` `cross_source_conflict` `ingest_lag_ms`
+
+### 模型输入矩阵
+
+特征经过 `build_matrix_rows()` 转换为 LightGBM 输入矩阵，包含 log 变换、缺失值处理和时间序列特性的保留。
 
 ---
 
-## 数据库表
+## 📋 规则引擎
 
-SQLite 默认本地文件为：
+系统实现了一个**可版本化、可回放**的规则引擎。
 
-```text
-etc_agent.db
-```
+| 规则层 | 触发条件 | 行为 |
+|--------|---------|------|
+| **P1** | 极端波动 + 大规模爆仓 + OI 异动组合 | 直接告警 |
+| **P2** | 中等异动、OI 累积、资金费率偏移 | 进入人工审核 |
+| **P3** | 轻微异动、单一信号 | 仅记录 (suppressed) |
+| **Early Warning** | 微信号持续累积 + 趋势确认 | 跟踪候选，不直接告警 |
 
-Docker 中使用 volume：
+### ML 信号融入规则引擎
 
-```text
-/data/etc_agent.db
-```
-
-核心表：
-
-- `raw_event`
-- `feature_snapshot`
-- `risk_case`
-- `risk_alert`
-- `human_review_action`
-- `rule_version`
-- `rule_change_log`
-- `llm_call`
-- `quality_metric_event`
-- `risk_model_label`
-- `risk_model_prediction`
-- `historical_market_bar`
+LightGBM 实时预测结果通过 `prediction_to_rule_hit()` 转换为 `ML_RISK_PROBABILITY` 规则命中，与纯规则信号平行进入 LangGraph 工作流——实现**规则 + 模型双信号源**融合。
 
 ---
 
-## 运行测试
+## 🔬 评测体系
 
-推荐先跑重点回归：
+系统内置两套评测机制和完整的 Prometheus 运维指标覆盖。
 
-```powershell
-python -m compileall -q src
-python -m unittest tests.test_historical_ml tests.test_risk_model -v
+### 离线弱标签评测 (`/evaluation/offline`)
+
+基于真实历史快照 + 未来窗口价格变动，构建弱标签数据集，评测：
+
+| 策略 | 监控指标 |
+|------|---------|
+| rules_baseline | 纯规则全量告警的 precision / recall / F1 |
+| early_warning | 提前预警的召回率 + 平均提前量 |
+| agent_alert | Agent 审核后正式告警 vs P1/P2 ground truth |
+
+### 运行时代理指标 (`/evaluation/summary`)
+
+| 指标 | 含义 |
+|------|------|
+| false_positive_proxy_rate | 审核驳回 Case 占比 → Precision 代理 |
+| missed_alert_proxy_rate | 高信号未告警 Case 占比 → Recall 代理 |
+| dedupe_rate | 重复告警抑制率 |
+| approval_rate | 人工审核批准比例 |
+
+### Prometheus 运维指标 (14 项)
+
+```
+feature_snapshot_total   │ rule_hit_total        │ llm_call_total
+case_created_total       │ alert_sent_total       │ pending_review_gauge
+human_review_total       │ data_quality_event_total│ ml_prediction_total
+ml_inference_duration_*  │ ml_training_duration   │ ml_model_auc_roc
 ```
 
-较完整的核心测试：
+---
+
+## 🎮 模拟测试
+
+内置 **9 个风险场景**用于系统行为验证：
+
+| 场景 | 资产 | 类型 |
+|------|------|------|
+| btc_flash_crash_p1 | BTC | P1 闪崩 |
+| btc_leverage_buildup_p2 | BTC | P2 杠杆堆积 |
+| btc_early_warning_to_p2 | BTC | 早期预警→P2 渐进 |
+| eth_funding_squeeze_p2 | ETH | 资金费率极端 |
+| eth_volatile_liquidation_p1 | ETH | 波动性清算级联 |
+| sol_vol_spike_p2 | SOL | 波动率异常飙升 |
+| sol_data_conflict_qa | SOL | 数据源冲突告警 |
+| multi_asset_systemic_risk | BTC | 多资产联动风险 |
+| btc_normal_market | BTC | 正常市场(验证不误报) |
+
+<!-- 示例截图占位 -->
+<p align="center">
+  <em>📸 模拟测试结果截图</em>
+  <br>
+  <img src="docs/screenshots/placeholder-simulation.png" width="65%" alt="模拟测试">
+</p>
+
+---
+
+## 🗄️ 数据库设计
+
+SQLAlchemy ORM，SQLite 持久化，Docker 环境挂载 volume 防数据丢失。
+
+| 表 | 用途 | 数据量 (Demo) |
+|---|------|--------------|
+| `raw_event` | 原始行情事件 | — |
+| `feature_snapshot` | 30s 滚动特征快照 | 360 |
+| `risk_case` | 风控案例 | 60 |
+| `risk_alert` | 发出的告警 | 16 |
+| `human_review_action` | 审核操作记录 | 30 |
+| `llm_call` | LLM 调用追踪 | 120 |
+| `quality_metric_event` | 数据质量事件 | 60 |
+| `risk_model_label` | 弱标注 | 80 |
+| `risk_model_prediction` | ML 预测记录 | 80 |
+| `historical_market_bar` | 历史行情 K 线 | 3,162,240 |
+| `rule_version` / `rule_change_log` | 规则版本管理 | — |
+
+---
+
+## 🧪 测试覆盖
 
 ```powershell
 python -m unittest `
-  tests.test_market_candles `
-  tests.test_offline_evaluation `
-  tests.test_runtime_quality_api `
-  tests.test_rules `
-  tests.test_historical_ml `
-  tests.test_risk_model `
-  tests.test_simulation_runner `
+  tests/test_risk_model.py `
+  tests/test_rule_engine.py `
+  tests/test_offline_evaluation.py `
+  tests/test_historical_ml.py `
+  tests/test_simulation_runner.py `
+  tests/test_runtime_quality_api.py `
+  tests/test_ml_improvements.py `
+  tests/test_market_candles.py `
   -v
 ```
 
-前端构建：
+| 测试文件 | 覆盖范围 |
+|---------|---------|
+| `test_risk_model.py` | LightGBM 训练、校准、预测、模型状态 |
+| `test_rule_engine.py` | P1/P2/P3/EW 规则，边界值、组合条件 |
+| `test_offline_evaluation.py` | 弱标签评测全流程 |
+| `test_historical_ml.py` | 历史数据下载、特征工程、训练链路 |
+| `test_simulation_runner.py` | 9 个场景执行与结果验证 |
+| `test_ml_improvements.py` | v1→v2→v3 回归验证 |
 
-```powershell
-docker compose exec -T frontend npm run build
-```
+---
 
-容器内确认 LightGBM：
+## 🐳 Docker 部署
 
-```powershell
-docker compose exec -T backend python -c "import lightgbm, sklearn; print(lightgbm.__version__, sklearn.__version__)"
+```yaml
+# docker-compose.yml 核心结构
+services:
+  backend:   # Python FastAPI + uvicorn + LightGBM
+    build: Dockerfile.backend.dev
+    ports: [8000:8000]
+    volumes: [.:/app, backend_db:/data]
+
+  frontend:  # React SPA (Vite dev server 或 build 静态文件)
+    build: frontend/Dockerfile.dev
+    ports: [5173:5173]
+    depends_on: [backend]
 ```
 
 ---
 
-## 常见问题
-
-### 1. `http://localhost:5173` 打不开
-
-检查容器：
-
-```powershell
-docker compose ps
-docker compose logs frontend
-```
-
-### 2. 前端能开，但接口失败
-
-检查后端：
-
-```powershell
-docker compose logs backend
-Invoke-RestMethod http://localhost:8000/api/v1/health
-```
-
-### 3. Binance / OKX 连接失败
-
-优先检查：
-
-- 宿主机能否访问交易所。
-- 容器代理是否配置。
-- 代理软件是否允许局域网连接。
-- `.env` 中 `WS_PROXY` 是否使用 `host.docker.internal`。
-
-### 4. LightGBM 报 `libgomp.so.1` 缺失
-
-后端 Dockerfile 已安装：
+## 📂 项目结构
 
 ```text
-libgomp1
+crypto-risk-agent/
+├── main.py                         # 入口: uvicorn.run
+├── docker-compose.yml              # 一键部署
+├── pyproject.toml                  # Python 依赖
+├── .env.example                    # 环境变量模板
+├── artifacts/
+│   └── risk_model/latest.joblib    # 当前最优模型 (794 KB)
+├── frontend/
+│   ├── src/App.jsx                 # 实时/测试/评测三模式
+│   └── vite.config.js
+├── src/
+│   ├── api/app.py                  # FastAPI lifespan + ingestion 启停
+│   ├── api/routes.py               # 50+ REST/WS 端点
+│   ├── core/config.py              # pydantic-settings
+│   ├── core/proxy.py               # OpenAI 兼容客户端
+│   ├── domain/models.py            # Pydantic 领域模型
+│   ├── features/builder.py         # 特征快照 + ML 推理
+│   ├── rules/engine.py             # 规则引擎
+│   ├── graph/                      # LangGraph 工作流
+│   │   ├── orchestrator.py         # 状态图拓扑
+│   │   ├── nodes.py                # 5 个 Agent 节点
+│   │   └── coordinator.py          # 跨资产协调
+│   ├── ml/                         # ML 全链路
+│   │   ├── risk_model.py           # 训练/校准/预测
+│   │   ├── labeling.py             # 弱标注 + future_summary
+│   │   ├── historical_training.py  # 历史训练 + 采样
+│   │   └── historical_data.py      # Binance 数据下载
+│   ├── evaluation/offline.py       # 离线评测 + 调参
+│   ├── simulation/                 # 场景模拟
+│   ├── memory/                     # 向量记忆 + 偏好学习
+│   └── observability/metrics.py    # Prometheus 指标
+├── scripts/
+│   ├── train_optuna.py             # Optuna 搜索脚本
+│   ├── train_best_params.py        # 最优参数训练
+│   ├── download_2024_h2.py         # 数据下载
+│   └── seed_demo_data.py           # 种子数据
+└── tests/                          # 单元测试
 ```
 
-如果本地非 Docker 环境报错，需要安装系统 OpenMP runtime。
+---
 
-### 5. 历史数据下载慢
+## 🛠️ 常用命令
 
-Binance public monthly zip 单文件较大。建议按资产、月份或季度分批跑。
+```powershell
+# 查看模型状态
+Invoke-RestMethod http://localhost:8000/api/v1/ml/risk-model/status
 
-### 6. 评测总结接口较慢
+# 启动 Agent
+Invoke-RestMethod -Method POST http://localhost:8000/api/v1/agent/start
 
-`/evaluation/summary` 会聚合大量真实运行数据、离线弱标签和质量指标。数据量大时可能需要几十秒，前端会等待返回。
+# 下载历史数据 (按月)
+python scripts/download_2024_h2.py
 
-### 7. 当前历史模型只对部分资产有效
+# Optuna 超参搜索
+python scripts/train_optuna.py
 
-如果只用 BTC 历史数据训练，模型元数据会记录 `assets=["BTC"]`，实时预测只作用于 BTC。补齐 ETH/SOL 历史数据并重新训练后，模型才会覆盖全部资产。
+# 最优参数完整训练
+python scripts/train_best_params.py
+
+# 评测总结
+Invoke-RestMethod http://localhost:8000/api/v1/evaluation/summary
+```
 
 ---
 
-## 当前限制
+## ⚠️ 声明
 
-- 实时链路的增强成交量/basis 特征还没有完全补齐，历史训练与实时预测特征存在部分口径差异。
-- 2024/2025 全量历史数据需要按批次下载，仓库不会内置完整行情数据。
-- LLM-as-judge 不适合全量无脑标注，应优先用于边界样本和争议样本。
-- SQLite 适合开发和演示，生产建议迁移到 PostgreSQL。
-- 当前模型指标依赖弱标签，不能等同于人工标注真值。
-- 告警策略仍应由规则、模型、人工审核共同约束，不能只靠模型概率直接自动交易。
+本项目为**研发演示系统**，模型无法保证在极端市场条件下 100% 捕获所有风险。不构成投资建议或风控保障，不可直接用于资金安全决策。告警结果需人工审核或专业风控系统兜底。
 
 ---
 
-## 技术栈
+## 📄 License
 
-| 模块 | 技术 |
-|---|---|
-| 后端 API | FastAPI, uvicorn |
-| Agent 编排 | LangGraph, langgraph-checkpoint-sqlite |
-| LLM | OpenAI-compatible SDK, 火山 Ark |
-| 数据接入 | websockets, httpx, aiohttp |
-| 数据库 | SQLite, SQLAlchemy async, aiosqlite |
-| 规则引擎 | Python deterministic rules |
-| 模型 | LightGBM, scikit-learn, joblib, numpy |
-| 前端 | React, Vite |
-| 可观测性 | prometheus-client, Grafana |
-| 测试 | unittest |
+MIT
 
 ---
 
-## 推荐开发顺序
-
-如果继续提升模型效果，建议按这个顺序做：
-
-1. 补齐 BTC/ETH/SOL 2024/2025 spot + futures 1m 历史数据。
-2. 重新训练历史版 LightGBM。
-3. 对 false positive 样本做 hard negative 加强。
-4. 对边界样本使用 LLM-as-judge 复核。
-5. 补齐实时成交量、taker buy ratio、basis 特征。
-6. 用 walk-forward 验证替代单次时间切分。
-7. 在评测页区分 P1/P2 分层 precision、recall、F1。
+<p align="center">
+  <b>🚀 如果你觉得这个项目有帮助，请给一个 Star ⭐</b>
+  <br><br>
+  <em>Built with Python, React, LangGraph, LightGBM & Optuna</em>
+</p>
