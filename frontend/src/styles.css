@@ -30,16 +30,29 @@ button {
   background: #f08b51;
   color: #171717;
   cursor: pointer;
-  transition: transform 180ms ease, opacity 180ms ease;
+  transition: transform 180ms ease, opacity 180ms ease, background 180ms ease;
 }
 
 button:hover {
   transform: translateY(-1px);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
 button.ghost {
   background: rgba(255, 255, 255, 0.08);
   color: #f5efe5;
+}
+
+button.active-tab,
+.asset-selected {
+  background: rgba(240, 139, 81, 0.18);
+  border-color: rgba(240, 139, 81, 0.5);
+  color: #fff3e8;
 }
 
 input,
@@ -137,6 +150,13 @@ pre {
   padding: 1.4rem;
 }
 
+.card-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .status-line {
   display: flex;
   align-items: center;
@@ -165,6 +185,28 @@ pre {
   margin-top: 1rem;
 }
 
+.pagination-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pagination-actions button {
+  padding: 0.65rem 0.9rem;
+}
+
+.lang-switcher {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.lang-switcher button {
+  padding: 0.5rem 0.9rem;
+}
+
 .banner {
   border-radius: 24px;
   padding: 0.9rem 1rem;
@@ -178,12 +220,17 @@ pre {
 }
 
 .top-grid {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.85fr);
   margin-bottom: 1.25rem;
 }
 
 .bottom-grid {
-  grid-template-columns: 1.25fr 0.95fr;
+  grid-template-columns: 1.05fr 0.95fr;
+  margin-bottom: 1.25rem;
+}
+
+.single-grid {
+  grid-template-columns: 1fr;
 }
 
 .panel {
@@ -191,10 +238,15 @@ pre {
   padding: 1.25rem;
 }
 
+.panel-chart {
+  overflow: hidden;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 1rem;
 }
 
@@ -212,7 +264,20 @@ pre {
 }
 
 .asset-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
+}
+
+.inline-note {
+  margin-bottom: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(245, 239, 229, 0.74);
+}
+
+.inline-note.warning {
+  background: rgba(240, 139, 81, 0.14);
+  color: #ffd4bc;
 }
 
 .asset-card,
@@ -222,6 +287,11 @@ pre {
   padding: 1rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.asset-button {
+  text-align: left;
+  color: inherit;
 }
 
 .asset-head,
@@ -313,15 +383,317 @@ pre {
   background: rgba(12, 12, 12, 0.35);
 }
 
+.asset-switcher {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.asset-switcher.compact button {
+  padding: 0.55rem 0.95rem;
+}
+
+.chart-wrap {
+  display: grid;
+  gap: 1rem;
+}
+
+.chart-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.chart-toolbar h2 {
+  margin: 0;
+}
+
+.chart-badges {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chart-badge {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 239, 229, 0.82);
+  font-size: 0.84rem;
+}
+
+.chart-badge.live {
+  background: rgba(57, 208, 143, 0.16);
+  color: #8ff0bf;
+}
+
+.chart-badge.closed {
+  background: rgba(95, 170, 255, 0.16);
+  color: #b4d6ff;
+}
+
+.chart-surface {
+  border-radius: 24px;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    rgba(7, 7, 7, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+}
+
+.chart-svg {
+  width: 100%;
+  min-width: 520px;
+  height: 260px;
+}
+
+.chart-axis-title,
+.chart-axis-price {
+  fill: rgba(245, 239, 229, 0.58);
+  font-size: 11px;
+}
+
+.chart-axis-tick {
+  stroke: rgba(245, 239, 229, 0.28);
+  stroke-width: 1;
+}
+
+.chart-grid-line {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 1;
+}
+
+.chart-axis-label {
+  fill: rgba(245, 239, 229, 0.5);
+  font-size: 11px;
+}
+
+.candle-wick {
+  stroke-width: 2;
+}
+
+.candle-body {
+  stroke-width: 1;
+}
+
+.candle-group {
+  cursor: pointer;
+  outline: none;
+}
+
+.candle-hitbox {
+  fill: transparent;
+}
+
+.candle-group.selected .candle-hitbox {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(240, 139, 81, 0.28);
+  stroke-width: 1;
+}
+
+.candle-group:focus-visible .candle-hitbox {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(156, 200, 255, 0.5);
+  stroke-width: 1;
+}
+
+.candle-wick.up,
+.candle-body.up {
+  stroke: #43d58d;
+  fill: rgba(67, 213, 141, 0.84);
+}
+
+.candle-wick.down,
+.candle-body.down {
+  stroke: #ff7a67;
+  fill: rgba(255, 122, 103, 0.84);
+}
+
+.chart-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.candle-detail-card {
+  border-radius: 24px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.compact-header {
+  margin-bottom: 0.85rem;
+}
+
+.compact-header h3 {
+  margin: 0;
+}
+
+.candle-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.chart-stat {
+  border-radius: 18px;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.chart-stat span {
+  display: block;
+  color: rgba(245, 239, 229, 0.62);
+  margin-bottom: 0.35rem;
+}
+
+.chart-stat strong {
+  font-size: 1.05rem;
+}
+
+.workspace-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+.workspace-main {
+  min-width: 0;
+}
+
+.mode-sidebar {
+  position: sticky;
+  top: 1.2rem;
+  align-self: start;
+}
+
+.side-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.mode-list,
+.scenario-list,
+.simulation-steps,
+.test-main,
+.panel-subsection {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.flat-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.mode-list button,
+.scenario-button {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+  text-align: left;
+  border-radius: 20px;
+}
+
+.mode-list button span,
+.scenario-button span {
+  color: rgba(245, 239, 229, 0.7);
+}
+
+.sidebar-switcher {
+  justify-content: flex-start;
+}
+
+.compact-hero {
+  margin-bottom: 1rem;
+}
+
+.compact-hero .hero-copy {
+  max-width: 56rem;
+}
+
+.stack-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.embedded-card {
+  border: 0;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+}
+
+.test-grid {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.test-sidebar {
+  align-self: start;
+}
+
+.scenario-runner {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.simulation-step-card h3,
+.simulation-column h4 {
+  margin: 0;
+}
+
+.simulation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.simulation-column {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.simulation-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.metric-card.metric-muted {
+  opacity: 0.72;
+}
+
+.severity-ok {
+  background: rgba(67, 213, 141, 0.16);
+  color: #98f2c2;
+}
+
 @media (max-width: 1080px) {
+  .workspace-shell,
   .hero,
   .top-grid,
-  .bottom-grid {
+  .bottom-grid,
+  .test-grid {
     grid-template-columns: 1fr;
   }
 
-  .asset-grid {
-    grid-template-columns: 1fr;
+  .mode-sidebar {
+    position: static;
+  }
+
+  .simulation-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -330,7 +702,24 @@ pre {
     padding: 1rem;
   }
 
-  .status-actions {
+  .status-actions,
+  .pagination-actions,
+  .chart-summary,
+  .candle-detail-grid,
+  .chart-toolbar,
+  .panel-header,
+  .card-topline {
+    grid-template-columns: 1fr;
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chart-svg {
+    min-width: 420px;
+  }
+
+  .simulation-grid,
+  .simulation-metrics-grid {
+    grid-template-columns: 1fr;
   }
 }

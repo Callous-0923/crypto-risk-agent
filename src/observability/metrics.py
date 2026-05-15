@@ -137,3 +137,34 @@ data_quality_event_total = Counter(
     "数据质量问题事件数",
     ["asset", "issue_type"],  # stale / conflict
 )
+
+# ---------------------------------------------------------------------------
+# ML 模型 (LightGBM)
+# ---------------------------------------------------------------------------
+
+ml_inference_duration_seconds = Histogram(
+    "ml_inference_duration_seconds",
+    "LightGBM 模型单次推理耗时（秒）",
+    buckets=[0.0005, 0.001, 0.002, 0.005, 0.01, 0.05, 0.1, 0.5],
+)
+
+ml_prediction_total = Counter(
+    "ml_prediction_total",
+    "ML 模型预测总次数",
+    ["risk_level"],  # P1 / P2 / P3 / none
+)
+
+ml_training_duration_seconds = Gauge(
+    "ml_training_duration_seconds",
+    "最近一次 LightGBM 训练耗时（秒）",
+)
+
+ml_training_samples = Gauge(
+    "ml_training_samples",
+    "最近一次训练的样本数",
+)
+
+ml_model_auc_roc = Gauge(
+    "ml_model_auc_roc",
+    "最近一次训练的 AUC-ROC（校准后）",
+)

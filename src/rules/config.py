@@ -33,8 +33,22 @@ class RuleThresholds(BaseModel):
     oi_delta_p2: float = 0.10
     liq_usd_p1: float = 50_000_000.0
     funding_z_p2: float = 2.5
-    vol_z_spike: float = 3.0          # 波动率 z-score 触发阈值
-    cross_source_conflict_pct: float = 0.005  # 价格冲突偏差阈值
+    early_warning_ret_5m: float = 0.008
+    early_warning_oi_delta: float = 0.04
+    early_warning_funding_z: float = 1.5
+    early_warning_vol_z: float = 1.5
+    early_warning_min_score: float = 0.50
+    early_warning_min_signals: int = 2
+    early_warning_single_signal_min_score: float = 0.65
+    early_warning_persistence_window: int = 3
+    early_warning_persistence_hits: int = 2
+    early_warning_dynamic_baseline: bool = False
+    early_warning_dynamic_history: int = 24
+    early_warning_dynamic_quantile: float = 0.80
+    early_warning_trend_window: int = 4
+    early_warning_min_trend_hits: int = 1
+    vol_z_spike: float = 3.0
+    cross_source_conflict_pct: float = 0.005
 
     @classmethod
     def from_app_settings(cls) -> "RuleThresholds":
@@ -45,12 +59,27 @@ class RuleThresholds(BaseModel):
             oi_delta_p2=app_settings.oi_delta_p2,
             liq_usd_p1=app_settings.liq_usd_p1,
             funding_z_p2=app_settings.funding_z_p2,
+            early_warning_ret_5m=app_settings.early_warning_ret_5m,
+            early_warning_oi_delta=app_settings.early_warning_oi_delta,
+            early_warning_funding_z=app_settings.early_warning_funding_z,
+            early_warning_vol_z=app_settings.early_warning_vol_z,
+            early_warning_min_score=app_settings.early_warning_min_score,
+            early_warning_min_signals=app_settings.early_warning_min_signals,
+            early_warning_single_signal_min_score=app_settings.early_warning_single_signal_min_score,
+            early_warning_persistence_window=app_settings.early_warning_persistence_window,
+            early_warning_persistence_hits=app_settings.early_warning_persistence_hits,
+            early_warning_dynamic_baseline=app_settings.early_warning_dynamic_baseline,
+            early_warning_dynamic_history=app_settings.early_warning_dynamic_history,
+            early_warning_dynamic_quantile=app_settings.early_warning_dynamic_quantile,
+            early_warning_trend_window=app_settings.early_warning_trend_window,
+            early_warning_min_trend_hits=app_settings.early_warning_min_trend_hits,
+            cross_source_conflict_pct=app_settings.cross_source_conflict_pct,
         )
 
     def diff(self, other: "RuleThresholds") -> dict[str, dict[str, Any]]:
         """返回与另一版本的差异字段。"""
         result = {}
-        for field in self.model_fields:
+        for field in RuleThresholds.model_fields:
             old_val = getattr(self, field)
             new_val = getattr(other, field)
             if old_val != new_val:

@@ -35,6 +35,10 @@ def _route_after_decide(state: RiskState) -> str:
 
 
 def _route_after_build(state: RiskState) -> str:
+    if state.get("case_reused"):
+        return END
+    if state.get("highest_severity") == Severity.P3:
+        return END
     d = state.get("decision")
     if d == Decision.MANUAL_REVIEW:
         return "await_review"   # interrupt_before 这个节点，图在此暂停
@@ -101,7 +105,7 @@ async def init_graph() -> None:
     )
 
 
-async def process_snapshot(snap: FeatureSnapshot) -> None:
+async def process_snapshot(snap: FeatureSnapshot, ml_prediction: dict | None = None) -> None:
     """提交一个快照进入图处理，每次新建独立 thread_id（case_id）。"""
     if _compiled is None:
         raise RuntimeError("Graph not initialized, call init_graph() first")
@@ -115,6 +119,8 @@ async def process_snapshot(snap: FeatureSnapshot) -> None:
         "is_coordinator_case": False,
         "recent_alert_history": [],
         "fatigue_suppressed": False,
+        "memory_context": None,
+        "ml_prediction": ml_prediction,
         "rule_hits": [],
         "highest_severity": None,
         "technical_analysis": None,
@@ -127,9 +133,11 @@ async def process_snapshot(snap: FeatureSnapshot) -> None:
         "risk_quantification_zh": "",
         "decision": None,
         "case": None,
+        "case_reused": False,
         "alert": None,
         "human_approved": None,
         "human_comment": "",
+        "enriched_memory": None,
     }
     await _compiled.ainvoke(initial, config=config)
 
@@ -155,6 +163,8 @@ async def process_coordinator_case(
         "is_coordinator_case": True,
         "recent_alert_history": [],
         "fatigue_suppressed": False,
+        "memory_context": None,
+        "ml_prediction": None,
         "rule_hits": rule_hits,
         "highest_severity": severity,
         "technical_analysis": None,
@@ -167,9 +177,11 @@ async def process_coordinator_case(
         "risk_quantification_zh": "",
         "decision": Decision.MANUAL_REVIEW,
         "case": None,
+        "case_reused": False,
         "alert": None,
         "human_approved": None,
         "human_comment": "",
+        "enriched_memory": None,
     }
     await _compiled.ainvoke(initial, config=config)
     return thread_id

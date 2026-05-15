@@ -9,6 +9,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed
 
 from src.core.logging import get_logger
+from src.core.proxy import get_ws_proxy
 from src.domain.models import Asset, RawEvent
 from src.ingestion.normalizer import normalize_and_publish
 
@@ -32,7 +33,7 @@ FUTURES_STREAMS = [
     for a in ASSETS
 ]
 
-SPOT_WS_BASE = "wss://stream.binance.com:9443/stream?streams="
+SPOT_WS_BASE = "wss://data-stream.binance.vision/stream?streams="
 FUTURES_WS_BASE = "wss://fstream.binance.com/stream?streams="
 
 
@@ -121,9 +122,15 @@ def _parse_futures(data: dict) -> RawEvent | None:
 
 
 async def _run_stream(url: str, parser, label: str) -> None:
+    proxy = get_ws_proxy()
+    connect_kwargs: dict = {"ping_interval": 20}
+    if proxy:
+        connect_kwargs["proxy"] = proxy
+        logger.info("Using proxy %s for %s", proxy, label)
+
     while True:
         try:
-            async with websockets.connect(url, ping_interval=20) as ws:
+            async with websockets.connect(url, **connect_kwargs) as ws:
                 logger.info("Connected to %s", label)
                 async for raw in ws:
                     data = json.loads(raw)

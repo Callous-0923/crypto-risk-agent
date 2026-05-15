@@ -6,16 +6,23 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from openai import OpenAI
-
 from src.core.config import settings
 from src.core.logging import get_logger
+from src.core.proxy import build_openai_client
 from src.domain.models import Asset
+from src.observability.llm_trace import record_llm_call, run_in_executor_with_context
 from src.observability.metrics import llm_call_duration_seconds, llm_call_total, llm_error_total
 from src.rules.config import registry
 
 logger = get_logger(__name__)
-_llm = OpenAI(api_key=settings.ark_api_key, base_url=settings.ark_base_url)
+_llm = None
+
+
+def _get_llm():
+    global _llm
+    if _llm is None:
+        _llm = build_openai_client(service="price validation LLM")
+    return _llm
 
 
 @dataclass
@@ -30,7 +37,7 @@ def _call_llm_json_sync(prompt: str) -> dict[str, Any]:
 
     t0 = time.perf_counter()
     try:
-        response = _llm.chat.completions.create(
+        response = _get_llm().chat.completions.create(
             model=settings.llm_model,
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
@@ -39,6 +46,19 @@ def _call_llm_json_sync(prompt: str) -> dict[str, Any]:
         elapsed = time.perf_counter() - t0
         llm_call_duration_seconds.observe(elapsed)
         llm_call_total.labels(status="success").inc()
+        usage = getattr(response, "usage", None)
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
+        record_llm_call(
+            operation="price_validation",
+            status="success",
+            duration_ms=elapsed * 1000,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            model=settings.llm_model,
+        )
         text = (response.choices[0].message.content or "").strip()
         start = text.find("{")
         end = text.rfind("}") + 1
@@ -54,6 +74,7 @@ def _call_llm_json_sync(prompt: str) -> dict[str, Any]:
         )
         llm_error_total.labels(error_type=err_type).inc()
         llm_call_total.labels(status=err_type).inc()
+        record_llm_call(operation="price_validation", status=err_type, duration_ms=elapsed * 1000, model=settings.llm_model)
         raise
 
 
@@ -67,8 +88,7 @@ OKX 价格: {okx_price}
 
 请直接输出 JSON：
 {{"trust":"binance|okx|both","confidence":0-1,"reason":"..."}}"""
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, lambda: _call_llm_json_sync(prompt))
+    return await run_in_executor_with_context(lambda: _call_llm_json_sync(prompt))
 
 
 async def validate_sources(asset: Asset, binance_price: float, okx_price: float) -> ValidationResult:

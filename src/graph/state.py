@@ -16,6 +16,8 @@ class RiskState(TypedDict):
     is_coordinator_case: bool
     recent_alert_history: list[dict]
     fatigue_suppressed: bool
+    memory_context: dict | None
+    ml_prediction: dict | None
 
     # Rule results
     rule_hits: list[RuleHit]
@@ -34,8 +36,12 @@ class RiskState(TypedDict):
     # Decision
     decision: Decision | None
     case: RiskCase | None
+    case_reused: bool
     alert: RiskAlert | None
 
     # Human review
     human_approved: bool | None
     human_comment: str
+
+    # Long-term memory (enriched context from MemoryManager)
+    enriched_memory: dict | None

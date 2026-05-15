@@ -9,6 +9,7 @@ import httpx
 
 from src.core.config import settings
 from src.core.logging import get_logger
+from src.core.proxy import get_httpx_client_kwargs
 from src.domain.models import RiskAlert
 
 logger = get_logger(__name__)
@@ -43,7 +44,7 @@ async def _send_webhook(alert: RiskAlert) -> None:
         return
     payload = alert.model_dump(mode="json")
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(**get_httpx_client_kwargs(service="webhook", timeout=10)) as client:
             r = await client.post(settings.webhook_url, json=payload)
             r.raise_for_status()
             logger.info("Webhook sent for alert %s", alert.alert_id)

@@ -9,6 +9,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed
 
 from src.core.logging import get_logger
+from src.core.proxy import get_ws_proxy
 from src.domain.models import Asset, RawEvent
 from src.ingestion.normalizer import normalize_and_publish
 
@@ -95,9 +96,16 @@ def _parse(msg: dict) -> list[RawEvent]:
 
 async def run_okx_ws() -> None:
     from src.observability.metrics import ws_reconnect_total
+
+    proxy = get_ws_proxy()
+    connect_kwargs: dict = {"ping_interval": 20}
+    if proxy:
+        connect_kwargs["proxy"] = proxy
+        logger.info("Using proxy %s for OKX WS", proxy)
+
     while True:
         try:
-            async with websockets.connect(OKX_WS, ping_interval=20) as ws:
+            async with websockets.connect(OKX_WS, **connect_kwargs) as ws:
                 await ws.send(json.dumps(SUBSCRIBE_MSG))
                 logger.info("OKX WebSocket connected and subscribed")
                 async for raw in ws:

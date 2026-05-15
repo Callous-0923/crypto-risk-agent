@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import httpx
 
 from src.core.logging import get_logger
+from src.core.proxy import get_httpx_client_kwargs
 from src.domain.models import Asset, RawEvent
 from src.ingestion.normalizer import normalize_and_publish
 
@@ -60,7 +61,7 @@ async def _fetch_funding(client: httpx.AsyncClient, asset: Asset) -> RawEvent | 
 
 
 async def run_coinglass_poll(interval: int = 60) -> None:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(**get_httpx_client_kwargs(service="Binance futures REST")) as client:
         while True:
             for asset in Asset:
                 oi = await _fetch_oi(client, asset)

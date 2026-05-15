@@ -13,10 +13,14 @@ dist/
 build/
 .eggs/
 
-# Database
+# Database (large training data)
 *.db
 *.db-shm
 *.db-wal
+
+# Node
+frontend/node_modules/
+frontend/dist/
 
 # Temp / reports
 report_alerts.json
@@ -31,13 +35,21 @@ rule_version_report.json
 .idea/
 *.swp
 *.swo
+.codebuddy/
 
 # Claude
 .claude/
+CLAUDE.md
 
 # Logs
 *.log
 
-# Interview / planning docs (Chinese filenames)
-面试*.md
+# Interview / planning / personal docs
+*面试*.md
+*方案*.md
+*resume*.md
 agent升级计划.md
+notes.md
+task_plan.md
+simulation_test_metrics.md
+project-report.html

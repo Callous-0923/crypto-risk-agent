@@ -42,18 +42,17 @@ class Phase6Tests(unittest.IsolatedAsyncioTestCase):
         async def fake_list_cases(*args, **kwargs):
             return [saved_cases[-1]] if saved_cases else []
 
-        async def fake_history(case: RiskCase) -> str:
+        async def fake_review_assistance(case: RiskCase, snap: FeatureSnapshot) -> tuple[str, str]:
             await asyncio.sleep(0.05)
-            return "历史上下文"
+            return "历史上下文", "风险量化"
 
-        async def fake_quant(case: RiskCase, snap: FeatureSnapshot) -> str:
-            await asyncio.sleep(0.05)
-            return "风险量化"
+        async def fake_find_active(*args, **kwargs):
+            return None
 
         with patch.object(nodes_mod, "save_risk_case", fake_save):
             with patch.object(repo_mod, "list_risk_cases", fake_list_cases):
-                with patch.object(assistants_mod, "build_historical_context", fake_history):
-                    with patch.object(assistants_mod, "quantify_risk", fake_quant):
+                with patch.object(repo_mod, "find_active_case_by_dedupe_key", fake_find_active):
+                    with patch.object(assistants_mod, "build_review_assistance", fake_review_assistance):
                         result = await node_build_case(
                             {
                                 "thread_id": "p2-case",
@@ -72,6 +71,7 @@ class Phase6Tests(unittest.IsolatedAsyncioTestCase):
                                 "risk_quantification_zh": "",
                                 "decision": Decision.MANUAL_REVIEW,
                                 "case": None,
+                                "case_reused": False,
                                 "alert": None,
                                 "human_approved": None,
                                 "human_comment": "",
@@ -103,31 +103,34 @@ class Phase6Tests(unittest.IsolatedAsyncioTestCase):
         with patch.object(nodes_mod, "save_risk_case", fake_save):
             with patch.object(repo_mod, "list_risk_cases", fake_list_cases):
                 with patch.object(repo_mod, "find_active_case_by_dedupe_key", fake_find_active):
-                    with patch.object(assistants_mod, "build_historical_context", side_effect=AssertionError("should not call")):
-                        with patch.object(assistants_mod, "quantify_risk", side_effect=AssertionError("should not call")):
-                            result = await node_build_case(
-                                {
-                                    "thread_id": "p1-case",
-                                    "asset": Asset.BTC,
-                                    "snapshot": _snap(),
-                                    "is_coordinator_case": False,
-                                    "rule_hits": [_hit(Severity.P1)],
-                                    "highest_severity": Severity.P1,
-                                    "technical_analysis": None,
-                                    "macro_context": None,
-                                    "technical_analysis_zh": "",
-                                    "macro_context_zh": "",
-                                    "summary_zh": "摘要",
-                                    "review_guidance": "指引",
-                                    "historical_context_zh": "",
-                                    "risk_quantification_zh": "",
-                                    "decision": Decision.EMIT,
-                                    "case": None,
-                                    "alert": None,
-                                    "human_approved": None,
-                                    "human_comment": "",
-                                }
-                            )
+                    with patch.object(
+                        assistants_mod,
+                        "build_review_assistance",
+                        side_effect=AssertionError("should not call"),
+                    ):
+                        result = await node_build_case(
+                            {
+                                "thread_id": "p1-case",
+                                "asset": Asset.BTC,
+                                "snapshot": _snap(),
+                                "is_coordinator_case": False,
+                                "rule_hits": [_hit(Severity.P1)],
+                                "highest_severity": Severity.P1,
+                                "technical_analysis": None,
+                                "macro_context": None,
+                                "technical_analysis_zh": "",
+                                "macro_context_zh": "",
+                                "summary_zh": "摘要",
+                                "review_guidance": "指引",
+                                "historical_context_zh": "",
+                                "risk_quantification_zh": "",
+                                "decision": Decision.EMIT,
+                                "case": None,
+                                "alert": None,
+                                "human_approved": None,
+                                "human_comment": "",
+                            }
+                        )
 
         self.assertEqual(len(saved_cases), 1)
         self.assertEqual(result["historical_context_zh"], "")

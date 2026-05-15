@@ -74,17 +74,82 @@ class FeatureSnapshot(BaseModel):
     price: float = 0.0
     ret_1m: float = 0.0
     ret_5m: float = 0.0
+    ret_15m: float = 0.0
+    ret_30m: float = 0.0
+    ret_60m: float = 0.0
     vol_z_1m: float = 0.0         # z-score of 1m volatility vs rolling baseline
+    realized_vol_5m: float = 0.0
+    realized_vol_15m: float = 0.0
+    realized_vol_60m: float = 0.0
+    price_range_pct_1m: float = 0.0
+    close_position_1m: float = 0.0
+    max_drawdown_15m: float = 0.0
+    max_drawdown_60m: float = 0.0
+    max_runup_15m: float = 0.0
+    max_runup_60m: float = 0.0
+    atr_14: float = 0.0
+    volatility_regime_60m: float = 0.0
+
+    # Volume / flow features
+    volume_1m: float = 0.0
+    quote_volume_1m: float = 0.0
+    volume_5m: float = 0.0
+    quote_volume_5m: float = 0.0
+    volume_15m: float = 0.0
+    quote_volume_15m: float = 0.0
+    volume_z_15m: float = 0.0
+    volume_z_60m: float = 0.0
+    trade_count_1m: float = 0.0
+    trade_count_z_15m: float = 0.0
+    taker_buy_ratio_1m: float = 0.0
+    taker_buy_ratio_5m: float = 0.0
 
     # Derivatives features
     oi_delta_15m_pct: float = 0.0
+    oi_delta_5m_pct: float = 0.0
+    oi_delta_60m_pct: float = 0.0
     liq_5m_usd: float = 0.0
     funding_z: float = 0.0        # z-score of funding rate
+    futures_basis_pct: float = 0.0
+    basis_z_60m: float = 0.0
 
     # Quality flags
     source_stale: bool = False
     cross_source_conflict: bool = False
     ingest_lag_ms: float = 0.0
+
+
+class MarketCandle(BaseModel):
+    asset: Asset
+    interval: str = "1m"
+    open_time: datetime
+    close_time: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    snapshot_count: int = 0
+    is_closed: bool = False
+
+
+class HistoricalMarketBar(BaseModel):
+    bar_id: str = Field(default_factory=_uid)
+    source: str = "binance_public"
+    market_type: str = "spot"
+    asset: Asset
+    symbol: str
+    interval: str = "1m"
+    open_time: datetime
+    close_time: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float = 0.0
+    quote_volume: float = 0.0
+    trade_count: int = 0
+    taker_buy_base_volume: float = 0.0
+    taker_buy_quote_volume: float = 0.0
 
 
 # ---------------------------------------------------------------------------

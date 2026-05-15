@@ -57,3 +57,15 @@ def test_quality_stale():
 def test_quality_conflict():
     hits = evaluate(_snap(cross_source_conflict=True))
     assert any(h.rule_id == "QA_CROSS_SOURCE_CONFLICT" for h in hits)
+
+
+def test_early_warning_price_drift_before_formal_p2():
+    hits = evaluate(_snap(ret_5m=0.01))
+    assert any(h.rule_id == "EW_PRICE_DRIFT_5M" for h in hits)
+    assert any(h.severity == Severity.P3 for h in hits)
+
+
+def test_early_warning_does_not_duplicate_formal_p2():
+    hits = evaluate(_snap(ret_1m=0.035, ret_5m=0.04))
+    assert any(h.rule_id == "MKT_EXTREME_VOL_P2" for h in hits)
+    assert not any(h.rule_id.startswith("EW_") for h in hits)

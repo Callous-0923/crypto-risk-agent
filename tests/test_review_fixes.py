@@ -30,6 +30,28 @@ def _hit(severity: Severity, dedupe_key: str = "dedupe:btc:p1") -> RuleHit:
     )
 
 
+def _early_warning_hit(
+    dedupe_key: str = "ew:btc:price",
+    *,
+    score: float = 0.75,
+    signal_count: int = 2,
+    candidate: bool = True,
+) -> RuleHit:
+    return RuleHit(
+        rule_id="EW_PRICE_DRIFT_5M",
+        asset=Asset.BTC,
+        severity=Severity.P3,
+        description="early warning hit",
+        confidence=score,
+        evidence={
+            "early_warning_score": score,
+            "early_warning_signal_count": signal_count,
+            "early_warning_candidate": candidate,
+        },
+        dedupe_key=dedupe_key,
+    )
+
+
 class ReviewFixTests(unittest.IsolatedAsyncioTestCase):
     def test_node_decide_fatigue_suppresses_p2_after_three_recent_alerts(self):
         now = datetime.utcnow()
@@ -47,6 +69,32 @@ class ReviewFixTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["decision"], Decision.SUPPRESS)
         self.assertTrue(result["fatigue_suppressed"])
+
+    def test_node_decide_suppresses_early_warning_p3_without_review(self):
+        result = node_decide(
+            {
+                "rule_hits": [_early_warning_hit()],
+                "highest_severity": Severity.P3,
+                "recent_alert_history": [],
+                "memory_context": {"early_warning_recent_candidates": 1},
+            }
+        )
+
+        self.assertEqual(result["decision"], Decision.SUPPRESS)
+        self.assertFalse(result["fatigue_suppressed"])
+
+    def test_node_decide_suppresses_single_snapshot_early_warning_noise(self):
+        result = node_decide(
+            {
+                "rule_hits": [_early_warning_hit(score=0.55, signal_count=1, candidate=False)],
+                "highest_severity": Severity.P3,
+                "recent_alert_history": [],
+                "memory_context": {"early_warning_recent_candidates": 0},
+            }
+        )
+
+        self.assertEqual(result["decision"], Decision.SUPPRESS)
+        self.assertFalse(result["fatigue_suppressed"])
 
     async def test_node_build_case_reuses_existing_p1_case_by_dedupe_key(self):
         import src.graph.nodes as nodes_mod
@@ -103,6 +151,139 @@ class ReviewFixTests(unittest.IsolatedAsyncioTestCase):
                     )
 
         self.assertEqual(result["case"].case_id, "existing-case")
+        self.assertTrue(result["case_reused"])
+
+    async def test_node_build_case_aggregates_existing_p2_case_by_dedupe_key(self):
+        import src.graph.nodes as nodes_mod
+        import src.graph.review_assistants as assistants_mod
+        import src.persistence.repositories as repo_mod
+
+        existing = RiskCase(
+            case_id="existing-p2-case",
+            asset=Asset.BTC,
+            status=CaseStatus.PENDING_REVIEW,
+            decision=Decision.MANUAL_REVIEW,
+            severity=Severity.P2,
+            rule_hits=[_hit(Severity.P2, dedupe_key="dedupe:btc:p2")],
+            summary_zh="old summary",
+        )
+        saved_cases = []
+        metric_events = []
+
+        async def fake_find(asset, dedupe_key, within_seconds=300):
+            self.assertEqual(asset, Asset.BTC)
+            self.assertEqual(dedupe_key, "dedupe:btc:p2")
+            self.assertGreaterEqual(within_seconds, 3600)
+            return existing
+
+        async def fake_save(case):
+            saved_cases.append(case.model_copy(deep=True))
+
+        async def fake_metric_event(event_type, **kwargs):
+            metric_events.append((event_type, kwargs))
+
+        async def fake_list(*args, **kwargs):
+            return [existing]
+
+        with patch.object(repo_mod, "find_active_case_by_dedupe_key", fake_find):
+            with patch.object(repo_mod, "save_quality_metric_event", fake_metric_event):
+                with patch.object(repo_mod, "list_risk_cases", fake_list):
+                    with patch.object(nodes_mod, "save_risk_case", fake_save):
+                        with patch.object(
+                            assistants_mod,
+                            "build_review_assistance",
+                            side_effect=AssertionError("aggregated P2 should not call review helpers"),
+                        ):
+                            result = await node_build_case(
+                                {
+                                    "thread_id": "new-p2-thread",
+                                    "asset": Asset.BTC,
+                                    "snapshot": _snap(),
+                                    "is_coordinator_case": False,
+                                    "recent_alert_history": [],
+                                    "fatigue_suppressed": False,
+                                    "rule_hits": [_hit(Severity.P2, dedupe_key="dedupe:btc:p2")],
+                                    "highest_severity": Severity.P2,
+                                    "technical_analysis": None,
+                                    "macro_context": None,
+                                    "technical_analysis_zh": "",
+                                    "macro_context_zh": "",
+                                    "summary_zh": "new summary",
+                                    "review_guidance": "",
+                                    "historical_context_zh": "",
+                                    "risk_quantification_zh": "",
+                                    "decision": Decision.MANUAL_REVIEW,
+                                    "case": None,
+                                    "case_reused": False,
+                                    "alert": None,
+                                    "human_approved": None,
+                                    "human_comment": "",
+                                }
+                            )
+
+        self.assertEqual(result["case"].case_id, "existing-p2-case")
+        self.assertTrue(result["case_reused"])
+        self.assertEqual(saved_cases[-1].summary_zh, "new summary")
+        self.assertEqual(metric_events[0][0], "p2_case_aggregated")
+        self.assertEqual(metric_events[0][1]["case_id"], "existing-p2-case")
+
+    async def test_node_build_case_skips_p3_early_warning_cases(self):
+        import src.graph.nodes as nodes_mod
+        import src.persistence.repositories as repo_mod
+
+        existing = RiskCase(
+            case_id="existing-ew-case",
+            asset=Asset.BTC,
+            status=CaseStatus.PENDING_REVIEW,
+            decision=Decision.MANUAL_REVIEW,
+            severity=Severity.P3,
+            rule_hits=[_early_warning_hit()],
+            summary_zh="old early warning",
+        )
+        saved_cases = []
+
+        async def fake_find(asset, dedupe_key, within_seconds=300):
+            raise AssertionError("P3 should not try to find or aggregate review cases")
+
+        async def fake_save(case):
+            saved_cases.append(case.model_copy(deep=True))
+
+        async def fake_list(*args, **kwargs):
+            return [existing]
+
+        with patch.object(repo_mod, "find_active_case_by_dedupe_key", fake_find):
+            with patch.object(repo_mod, "list_risk_cases", fake_list):
+                with patch.object(nodes_mod, "save_risk_case", fake_save):
+                    result = await node_build_case(
+                        {
+                            "thread_id": "new-ew-thread",
+                            "asset": Asset.BTC,
+                            "snapshot": _snap(),
+                            "is_coordinator_case": False,
+                            "recent_alert_history": [],
+                            "fatigue_suppressed": False,
+                            "rule_hits": [_early_warning_hit()],
+                            "highest_severity": Severity.P3,
+                            "technical_analysis": None,
+                            "macro_context": None,
+                            "technical_analysis_zh": "",
+                            "macro_context_zh": "",
+                            "summary_zh": "new early warning",
+                            "review_guidance": "",
+                            "historical_context_zh": "",
+                            "risk_quantification_zh": "",
+                            "decision": Decision.MANUAL_REVIEW,
+                            "case": None,
+                            "case_reused": False,
+                            "alert": None,
+                            "human_approved": None,
+                            "human_comment": "",
+                        }
+                    )
+
+        self.assertIsNone(result["case"])
+        self.assertFalse(result["case_reused"])
+        self.assertEqual(saved_cases, [])
 
     async def test_node_build_case_persists_fatigue_suppressed_case(self):
         import src.graph.nodes as nodes_mod
@@ -150,6 +331,12 @@ class ReviewFixTests(unittest.IsolatedAsyncioTestCase):
 
     def test_route_after_build_ends_for_suppressed_cases(self):
         self.assertEqual(_route_after_build({"decision": Decision.SUPPRESS}), END)
+
+    def test_route_after_build_ends_for_reused_cases(self):
+        self.assertEqual(
+            _route_after_build({"decision": Decision.MANUAL_REVIEW, "case_reused": True}),
+            END,
+        )
 
 
 if __name__ == "__main__":

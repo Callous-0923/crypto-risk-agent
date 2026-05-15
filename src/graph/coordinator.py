@@ -7,6 +7,7 @@ import json
 from src.core.config import settings
 from src.core.logging import get_logger
 from src.domain.models import Asset, CaseStatus, Decision, FeatureSnapshot, RiskCase, RuleHit, Severity
+from src.observability.llm_trace import run_in_executor_with_context
 from src.graph.nodes import _call_llm_sync
 from src.graph.orchestrator import process_coordinator_case, resume_case
 from src.persistence.repositories import (
@@ -40,9 +41,10 @@ async def _build_cross_asset_summary(asset_cases: dict[Asset, RiskCase]) -> tupl
 请直接输出 JSON：
 {{"summary_zh":"...","review_guidance":"..."}}"""
 
-    loop = asyncio.get_running_loop()
     try:
-        raw = await loop.run_in_executor(None, _call_llm_sync, prompt)
+        raw = await run_in_executor_with_context(
+            lambda: _call_llm_sync(prompt, operation="coordinator_summary")
+        )
         start = raw.find("{")
         end = raw.rfind("}") + 1
         data = json.loads(raw[start:end])
